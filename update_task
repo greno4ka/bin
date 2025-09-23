@@ -1,0 +1,26 @@
+#!/bin/bash
+
+taskNumber="$1"
+
+gyleHost="gyle"
+
+dryOutput=$(ssh "$gyleHost" task run "$taskNumber" --dry-run 2>&1 < /dev/null)
+problems="$?"
+
+echo "$dryOutput"
+
+if [ "$problems" = 1 ]; then
+    # we need some chill after big request
+    sleep 5
+    echo "$dryOutput" | while read str; do
+        subtask=$(echo "$str" | cut -d":" -f3 | cut -d"#" -f2 )
+        package=$(echo "$str" | cut -d'`' -f2 | cut -d"'" -f1 )
+        echo "Removing subtask $subtask with $package"
+        ssh "$gyleHost" task delsub "$taskNumber" "$subtask" < /dev/null
+        echo "Re-adding rebuilding $package before subtask $subtask"
+        ssh "$gyleHost" task add "$taskNumber" "$subtask" rebuild "$package" < /dev/null
+    done
+fi
+
+# Optionally you can run task after updating
+# ssh gyle task run "$taskNumber" < /dev/null
