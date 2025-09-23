@@ -1,0 +1,30 @@
+#!/bin/bash
+
+source spinner
+
+spinner &
+spinner_pid=$!
+
+# if it's first synchronization just create hardlinks
+# because it's faster and we need to save our tmpfs
+if [ -z "$(ls ~/hasher1/repo/x86_64/RPMS.hasher/)" ]; then
+    for filepath in ~/hasher/repo/x86_64/RPMS.hasher/*; do
+        filename=$(basename "$filepath")
+        for (( i=0 ; i<16 ; i++ )); do
+            ln ~/hasher/repo/x86_64/RPMS.hasher/"$filename" \
+            ~/hasher"$i"/repo/x86_64/RPMS.hasher/"$filename"
+        done
+    done
+else
+    for (( i=0 ; i<16 ; i++ )); do
+        rsync -aPq ~/hasher$i/repo/x86_64/RPMS.hasher/* \
+            ~/hasher/repo/x86_64/RPMS.hasher
+    done
+    for (( i=0 ; i<16 ; i++ )); do
+        rsync -aPq ~/hasher/repo/x86_64/RPMS.hasher/* \
+            ~/hasher$i/repo/x86_64/RPMS.hasher
+    done
+fi
+
+kill "$spinner_pid" >/dev/null 2>&1
+echo
