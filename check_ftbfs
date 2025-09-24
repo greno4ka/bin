@@ -1,0 +1,37 @@
+#!/bin/bash
+
+taskNumber="$1"
+
+tmpDir=$(mktemp -d "$TMP/tmp.XXXXXX")
+pushd "$tmpDir" 1>/dev/null
+
+wget -q https://git.altlinux.org/beehive/stats/Sisyphus/x86_64/ftbfs-since -O ftbfs_x86_64
+wget -q https://git.altlinux.org/beehive/stats/Sisyphus/i586/ftbfs-since -O ftbfs_i586
+
+cut -f1 ftbfs_x86_64 ftbfs_i586 | sort -u > ftbfs
+
+# Usually 1 iteration builds succesfully and generates list of unmets
+wget -q https://git.altlinux.org/tasks/"$taskNumber"/logs/events.1.1.log
+
+# Remove everything except names of nessesary packages
+# Yes, we could grab acls of package from here,
+# but after a half of year acls can change significantly
+sed '1,/ACLs of affected packages/d;/::/d' events.1.1.log | cut -d" " -f2 | sort > packages
+
+# this is a quite good result
+comm -21 packages ftbfs > result
+
+touch output
+while read -r package; do
+    joined=""
+    grep -q "$package" ftbfs_x86_64 && \
+        joined="[x86_64]" || \
+        joined="[i586]"
+    joined="$joined $package ($(ssh gyle acl sisyphus $package show < /dev/null | sed s/"$package\s"//))"
+    echo "$joined" >> output
+done < result
+
+cat output
+
+popd 1>/dev/null
+rm -rf "$tmpDir"
