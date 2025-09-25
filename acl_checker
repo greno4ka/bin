@@ -1,0 +1,23 @@
+#!/bin/bash
+
+tmpDir=$(mktemp -d "$TMP/tmp.XXXXXX")
+pushd "$tmpDir" 1>/dev/null
+
+wget git.altlinux.org/acl/list.packages.sisyphus
+
+# searching packages where grenka is leader (after tab not space)
+# and "project leader welcomes random builders" =)
+cat list.packages.sisyphus | \
+awk '/[^ ]grenka/{print}' | \
+grep "@everybody" | \
+while read string; do
+    package="$(echo $string | cut -d" " -f1)"
+    # I don't want slev@ or any of his friends to modify my packages
+    ssh gyle acl sisyphus "$package" del @everybody < /dev/null
+    if [ -n "$(echo $string | grep python)" ]; then
+        ssh gyle acl sisyphus "$package" add @python < /dev/null
+    fi
+done
+
+popd 1>/dev/null
+rm -rf "$tmpDir"
