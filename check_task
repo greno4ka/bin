@@ -1,0 +1,30 @@
+#!/bin/bash
+
+taskNumber=$1
+
+tmpDir=$(mktemp -d "$TMP/tmp.XXXXXX")
+pushd "$tmpDir" 1>/dev/null
+
+iterNumber=$(wget -qO- https://git.altlinux.org/tasks/"$taskNumber"/logs | grep events | \
+    tail -1 | sed -e 's/.*events\.\([[:digit:]]*\.[[:digit:]]\).log.*/\1/')
+
+wget -q https://git.altlinux.org/tasks/"$taskNumber"/logs/events."$iterNumber".log
+
+# don't check srpms, because it is very rare case - no sense
+grep 'grenka/packages' events."$iterNumber".log | while read string; do
+    package=$(echo "$string" | sed -e 's,.*packages\/\(.*\).git.*,\1,')
+    myVersion=$(echo "$string" | sed -e 's,.*build \(.*\) from.*,\1,')
+
+    srpmPath=$(ls /space/ALT/Sisyphus/files/SRPMS/"$package"-[0-9]*.src.rpm 2>/dev/null | head -n1)
+    if [ -n "$srpmPath" ]; then
+        sisyphusVersion=$(echo "$srpmPath" | rev | cut -d"." -f3- | cut -d"-" -f1,2 | rev )
+        if (( $(rpmevrcmp "$sisyphusVersion" "$myVersion") >= 0 )); then
+            echo "$package was updated in Sisyphus!"
+            rpm --lastchange -p "$srpmPath" 2>/dev/null | head -n 5
+            echo
+        fi
+    fi
+done
+
+popd 1>/dev/null
+rm -rf "$tmpDir"
