@@ -1,0 +1,91 @@
+#!/bin/bash
+
+source spinner
+
+usage() {
+    echo "This program downloads rpms from task directly to your hasher."
+    echo "Usage: $0 <task> <subtask|all>"
+    echo "  subtask - download all rpms till subtask number"
+    echo "  all     - download all task"
+    exit 1
+}
+
+confirm() {
+    echo "WARNING: This script will clean your hasher content!"
+    read -p "Do you want to continue? [y/N]: " CONFIRM
+    case "$CONFIRM" in
+        [yY]|[yY][eE][sS])
+            ;;
+        *)
+            echo "Operation cancelled."
+            exit 0
+            ;;
+    esac
+}
+
+cleanup() {
+    echo -e "\nInterrupted. Cleaning up..."
+    [[ -n "$spinner_pid" ]] && kill "$spinner_pid" >/dev/null 2>&1
+    [[ -n "$tmpDir" && -d "$tmpDir" ]] && rm -rf "$tmpDir"
+    exit 1
+}
+
+trap cleanup SIGINT
+
+prepare_hasher_repo() {
+    local repo="$HOME/hasher/repo/x86_64/RPMS.hasher"
+
+    if [ ! -d "$repo" ]; then
+        echo "Directory $dest not found. Creating with hsh --ini..."
+        hsh --ini 2>/dev/null
+    else
+        echo "Cleaning existing RPMs in $repo..."
+        rm -f "$repo"/*.rpm
+    fi
+    echo "Downloading task..."
+}
+
+if [ "$#" -ne 2 ]; then
+    usage
+fi
+
+taskNumber="$1"
+last="$2"
+
+main() {
+    if [[ "$last" =~ ^[0-9]+$ ]]; then
+        tmpDir=$(mktemp -d "$TMP/tmp.XXXXXX")
+        pushd "$tmpDir" 1>/dev/null
+        iterNumber=$(wget -qO- https://git.altlinux.org/tasks/"$taskNumber"/logs | grep events | \
+            tail -1 | sed -e 's/.*events\.\([[:digit:]]*\.[[:digit:]]\).log.*/\1/')
+
+        wget -q https://git.altlinux.org/tasks/"$taskNumber"/logs/events."$iterNumber".log
+
+        cat events."$iterNumber".log | grep build | cut -d" " -f1 | grep "#" | cut -d"#" -f2 |
+        while read number; do
+            if (( $number < $last )) ; then
+                rsync -aPq team.alt:/tasks/$taskNumber/build/$number/x86_64/rpms/*.rpm \
+                    ~/hasher/repo/x86_64/RPMS.hasher
+            fi
+        done
+
+        popd 1>/dev/null
+        rm -rf "$tmpDir"
+    elif [[ "$last" == "all" ]]; then
+        rsync -aP team.alt:/tasks/$taskNumber/build/*/x86_64/rpms/*.rpm \
+            ~/hasher/repo/x86_64/RPMS.hasher
+    else
+        echo "Invalid argument: $last"
+        usage
+    fi
+}
+
+confirm
+prepare_hasher_repo
+spinner &
+spinner_pid=$!
+
+(main)
+
+kill "$spinner_pid" >/dev/null 2>&1
+echo
