@@ -1,0 +1,43 @@
+#!/bin/bash
+
+source spinner
+
+usage() {
+    echo "This program downloads gits from task directly to your machine."
+    echo "Usage: $0 <task>"
+    exit 1
+}
+
+trap cleanup SIGINT
+
+if [ "$#" -ne 1 ]; then
+    usage
+fi
+
+taskNumber="$1"
+tmpDir=$(mktemp -d "$TMP/tmp.XXXXXX")
+
+main() {
+    pushd "$tmpDir" 1>/dev/null
+    iterNumber=$(wget -qO- https://git.altlinux.org/tasks/"$taskNumber"/logs | grep events | \
+        tail -1 | sed -e 's/.*events\.\([[:digit:]]*\.[[:digit:]]\).log.*/\1/')
+
+    wget -q https://git.altlinux.org/tasks/"$taskNumber"/logs/events."$iterNumber".log
+
+    cat events."$iterNumber".log | grep build | cut -d" " -f1 | grep "#" | cut -d"#" -f2 |
+    while read number; do
+        git clone -q team.alt:/tasks/$taskNumber/gears/$number/git $tmpDir/$number
+    done
+
+    popd 1>/dev/null
+}
+
+spinner &
+spinner_pid=$!
+
+(main)
+
+kill "$spinner_pid" >/dev/null 2>&1
+echo
+echo Your task gits in:
+echo $tmpDir
