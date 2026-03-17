@@ -61,7 +61,7 @@ main() {
 
         wget -q https://git.altlinux.org/tasks/"$taskNumber"/logs/events."$iterNumber".log
 
-        cat events."$iterNumber".log | grep build | cut -d" " -f1 | grep "#" | cut -d"#" -f2 |
+        cat events."$iterNumber".log | grep " build " | cut -d" " -f1 | grep "#" | cut -d"#" -f2 |
         while read number; do
             if (( $number < $last )) ; then
                 rsync -aPq team.alt:/tasks/$taskNumber/build/$number/x86_64/rpms/*.rpm \

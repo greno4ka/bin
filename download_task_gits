@@ -24,7 +24,7 @@ main() {
 
     wget -q https://git.altlinux.org/tasks/"$taskNumber"/logs/events."$iterNumber".log
 
-    cat events."$iterNumber".log | grep build | cut -d" " -f1 | grep "#" | cut -d"#" -f2 |
+    cat events."$iterNumber".log | grep " build " | cut -d" " -f1 | grep "#" | cut -d"#" -f2 |
     while read number; do
         git clone -q team.alt:/tasks/$taskNumber/gears/$number/git $tmpDir/$number
     done
