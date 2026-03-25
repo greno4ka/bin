@@ -1,0 +1,52 @@
+#!/bin/sh -efu
+
+tmpdir=$(mktemp -d)
+export LC_ALL=C
+
+if [ "$#" -eq 0 ]; then
+    echo "Usage: $0 versions or range"
+    echo "For example:"
+    echo "$0 6"
+    echo "$0 7 9 11"
+    echo "$0 6-12"
+    exit 1
+fi
+
+parse_versions() {
+    local versions=()
+    for arg in "$@"; do
+        if echo "$arg" | grep -qE '^[0-9]+-[0-9]+$'; then
+            start=$(echo "$arg" | cut -d'-' -f1)
+            end=$(echo "$arg" | cut -d'-' -f2)
+            for i in $(seq "$start" "$end"); do
+                versions+=("$i")
+            done
+        else
+            versions+=("$arg")
+        fi
+    done
+    echo "${versions[@]}"
+}
+
+versions=$(parse_versions "$@")
+
+for version in $versions; do
+    grep "\.cpython-3$version\.opt" \
+        /space/ALT/Sisyphus/{x86_64,noarch}/base/contents_index | \
+        cut -f2 | sort -u > "$tmpdir"/bad-byte-bin-$version
+
+    join -o 2.5 "$tmpdir"/bad-byte-bin-$version \
+        /space/ALT/Sisyphus/files/list/bin.list | \
+        sort -u > "$tmpdir"/bad-byte-src-$version.rpm
+
+    sort -k3,3 /space/ALT/Sisyphus/files/list/src.list > "$tmpdir"/src.list
+
+    join -2 3 -o 2.1 "$tmpdir"/bad-byte-src-$version.rpm \
+        "$tmpdir"/src.list > "$tmpdir"/bad-byte-src-$version.result
+
+    echo "Results for python 3.$version:"
+    cat "$tmpdir"/bad-byte-src-$version.result
+    echo "--------------------------------"
+done
+
+rm -rf "$tmpdir"
